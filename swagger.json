@@ -6,7 +6,8 @@
     "description": "Products and Categories API (CSE341 Project 2)"
   },
   "servers": [
-    { "url": "http://localhost:8080", "description": "Local" }
+    { "url": "http://localhost:8080", "description": "Local" },
+    { "url": "https://cse341-project2-g0e5.onrender.com", "description": "Render" }
   ],
   "tags": [
     { "name": "Categories" },
