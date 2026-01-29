@@ -3,6 +3,15 @@ const Product = require("../models/Product");
 
 const router = express.Router();
 
+// ---- AUTH GUARD ----
+function ensureAuth(req, res, next) {
+  if (req.isAuthenticated && req.isAuthenticated()) {
+    return next();
+  }
+  return res.status(401).json({ message: "Authentication required" });
+}
+
+// ---- HELPERS ----
 function httpError(statusCode, message, errors) {
   const err = new Error(message);
   err.statusCode = statusCode;
@@ -13,10 +22,17 @@ function httpError(statusCode, message, errors) {
 const REQUIRED = ["name", "sku", "price", "currency", "quantity", "categoryId"];
 
 function missingFields(body) {
-  return REQUIRED.filter((f) => body?.[f] === undefined || body?.[f] === null || String(body[f]).trim() === "");
+  return REQUIRED.filter(
+    (f) =>
+      body?.[f] === undefined ||
+      body?.[f] === null ||
+      String(body[f]).trim() === ""
+  );
 }
 
-// GET all
+// ---- ROUTES ----
+
+// GET all (PUBLIC)
 router.get("/", async (req, res, next) => {
   try {
     const products = await Product.find().lean();
@@ -26,7 +42,7 @@ router.get("/", async (req, res, next) => {
   }
 });
 
-// GET by id
+// GET by id (PUBLIC)
 router.get("/:id", async (req, res, next) => {
   try {
     const product = await Product.findById(req.params.id).lean();
@@ -37,12 +53,14 @@ router.get("/:id", async (req, res, next) => {
   }
 });
 
-// POST create
-router.post("/", async (req, res, next) => {
+// POST create (PROTECTED)
+router.post("/", ensureAuth, async (req, res, next) => {
   try {
     const missing = missingFields(req.body);
     if (missing.length) {
-      return next(httpError(400, `Missing required fields: ${missing.join(", ")}`));
+      return next(
+        httpError(400, `Missing required fields: ${missing.join(", ")}`)
+      );
     }
 
     const created = await Product.create({
@@ -52,7 +70,9 @@ router.post("/", async (req, res, next) => {
       currency: String(req.body.currency).trim(),
       inStock: req.body.inStock !== undefined ? Boolean(req.body.inStock) : true,
       quantity: Number(req.body.quantity),
-      tags: Array.isArray(req.body.tags) ? req.body.tags.map((t) => String(t).trim()) : [],
+      tags: Array.isArray(req.body.tags)
+        ? req.body.tags.map((t) => String(t).trim())
+        : [],
       categoryId: req.body.categoryId,
     });
 
@@ -62,12 +82,14 @@ router.post("/", async (req, res, next) => {
   }
 });
 
-// PUT update (all fields required for rubric-style PUT)
-router.put("/:id", async (req, res, next) => {
+// PUT update (PROTECTED)
+router.put("/:id", ensureAuth, async (req, res, next) => {
   try {
     const missing = missingFields(req.body);
     if (missing.length) {
-      return next(httpError(400, `Missing required fields: ${missing.join(", ")}`));
+      return next(
+        httpError(400, `Missing required fields: ${missing.join(", ")}`)
+      );
     }
 
     const updated = await Product.findByIdAndUpdate(
@@ -78,9 +100,12 @@ router.put("/:id", async (req, res, next) => {
           sku: String(req.body.sku).trim(),
           price: Number(req.body.price),
           currency: String(req.body.currency).trim(),
-          inStock: req.body.inStock !== undefined ? Boolean(req.body.inStock) : true,
+          inStock:
+            req.body.inStock !== undefined ? Boolean(req.body.inStock) : true,
           quantity: Number(req.body.quantity),
-          tags: Array.isArray(req.body.tags) ? req.body.tags.map((t) => String(t).trim()) : [],
+          tags: Array.isArray(req.body.tags)
+            ? req.body.tags.map((t) => String(t).trim())
+            : [],
           categoryId: req.body.categoryId,
         },
       },
@@ -94,8 +119,8 @@ router.put("/:id", async (req, res, next) => {
   }
 });
 
-// DELETE
-router.delete("/:id", async (req, res, next) => {
+// DELETE (PROTECTED)
+router.delete("/:id", ensureAuth, async (req, res, next) => {
   try {
     const deleted = await Product.findByIdAndDelete(req.params.id);
     if (!deleted) return next(httpError(404, "Product not found"));

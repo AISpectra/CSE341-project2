@@ -1,6 +1,10 @@
 require("dotenv").config();
+require("./auth/github"); // passport strategy setup
+
 const express = require("express");
 const cors = require("cors");
+const session = require("express-session");
+const passport = require("passport");
 
 const { connectToMongo } = require("./db/connect");
 
@@ -12,24 +16,97 @@ const swaggerDocument = require("./swagger.json");
 
 const app = express();
 
-app.use(cors());
+// Needed for secure cookies behind Render proxy
+app.set("trust proxy", 1);
+
+// CORS (important if Swagger / browser needs cookies)
+app.use(
+  cors({
+    origin: true,
+    credentials: true,
+  })
+);
+
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
+// Sessions (cookie-based auth)
+app.use(
+  session({
+    secret: process.env.SESSION_SECRET || "dev_secret_change_me",
+    resave: false,
+    saveUninitialized: false,
+    cookie: {
+      httpOnly: true,
+      sameSite: "lax",
+      secure: (process.env.BASE_URL || "").startsWith("https"), // true on Render
+    },
+  })
+);
+
+app.use(passport.initialize());
+app.use(passport.session());
+
+// Basic routes
 app.get("/health", (req, res) => res.status(200).json({ status: "ok" }));
 app.get("/", (req, res) => res.send("Project 2 API is running. Visit /api-docs"));
 
+// -------- AUTH ROUTES --------
+
+// Start OAuth
+app.get("/auth/github", passport.authenticate("github", { scope: ["user:email"] }));
+
+// OAuth callback
+app.get(
+  "/auth/github/callback",
+  passport.authenticate("github", { failureRedirect: "/auth/failed" }),
+  (req, res) => {
+    res.redirect("/auth/success");
+  }
+);
+
+app.get("/auth/success", (req, res) => {
+  res.status(200).json({
+    message: "Logged in",
+    user: req.user?.username || req.user?.displayName || "unknown",
+  });
+});
+
+app.get("/auth/failed", (req, res) => {
+  res.status(401).json({ message: "Login failed" });
+});
+
+// Check current session
+app.get("/auth/me", (req, res) => {
+  if (!req.isAuthenticated || !req.isAuthenticated()) {
+    return res.status(401).json({ message: "Not authenticated" });
+  }
+  return res.status(200).json({ user: req.user });
+});
+
+// Logout
+app.post("/auth/logout", (req, res) => {
+  req.logout(() => {
+    req.session.destroy(() => {
+      res.clearCookie("connect.sid");
+      res.status(200).json({ message: "Logged out" });
+    });
+  });
+});
+
+// -------- API ROUTES --------
 app.use("/products", productsRoutes);
 app.use("/categories", categoriesRoutes);
 
+// Swagger
 app.use("/api-docs", swaggerUi.serve, swaggerUi.setup(swaggerDocument));
 
-// 404 route
+// 404
 app.use((req, res) => {
   res.status(404).json({ message: "Route not found" });
 });
 
-// error handler
+// Error handler
 app.use((err, req, res, next) => {
   console.error("❌ Error:", err);
 

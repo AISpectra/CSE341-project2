@@ -2,18 +2,60 @@
   "openapi": "3.0.0",
   "info": {
     "title": "Project 2 API",
-    "version": "1.0.0",
-    "description": "Products and Categories API (CSE341 Project 2)"
+    "version": "2.0.0",
+    "description": "Products and Categories API (CSE341 Project 2) with OAuth login (GitHub) and cookie-based session protection for write operations."
   },
   "servers": [
-    { "url": "http://localhost:8080", "description": "Local" },
-    { "url": "https://cse341-project2-g0e5.onrender.com", "description": "Render" }
+    { "url": "https://cse341-project2-g0e5.onrender.com", "description": "Render" },
+    { "url": "http://localhost:8080", "description": "Local" }
   ],
   "tags": [
+    { "name": "Auth" },
     { "name": "Categories" },
     { "name": "Products" }
   ],
   "paths": {
+    "/auth/github": {
+      "get": {
+        "summary": "Start GitHub OAuth login",
+        "tags": ["Auth"],
+        "description": "Redirects the user to GitHub to authenticate. After success, GitHub redirects back to /auth/github/callback and a session cookie is created.",
+        "responses": {
+          "302": { "description": "Redirect to GitHub OAuth" }
+        }
+      }
+    },
+    "/auth/github/callback": {
+      "get": {
+        "summary": "GitHub OAuth callback",
+        "tags": ["Auth"],
+        "description": "OAuth callback endpoint used by GitHub. On success, creates an authenticated session and redirects to /auth/success.",
+        "responses": {
+          "302": { "description": "Redirect after successful login" },
+          "401": { "description": "Login failed" }
+        }
+      }
+    },
+    "/auth/me": {
+      "get": {
+        "summary": "Get current logged-in user (session)",
+        "tags": ["Auth"],
+        "responses": {
+          "200": { "description": "Current user returned" },
+          "401": { "description": "Not authenticated" }
+        }
+      }
+    },
+    "/auth/logout": {
+      "post": {
+        "summary": "Logout and destroy session",
+        "tags": ["Auth"],
+        "responses": {
+          "200": { "description": "Logged out" }
+        }
+      }
+    },
+
     "/categories": {
       "get": {
         "summary": "Get all categories",
@@ -24,8 +66,9 @@
         }
       },
       "post": {
-        "summary": "Create a category",
+        "summary": "Create a category (AUTH REQUIRED)",
         "tags": ["Categories"],
+        "security": [{ "cookieAuth": [] }],
         "requestBody": {
           "required": true,
           "content": {
@@ -42,6 +85,7 @@
         "responses": {
           "201": { "description": "Created (returns id)" },
           "400": { "description": "Validation error" },
+          "401": { "description": "Unauthorized (not logged in)" },
           "409": { "description": "Duplicate key" },
           "500": { "description": "Server error" }
         }
@@ -62,8 +106,9 @@
         }
       },
       "put": {
-        "summary": "Update a category by id",
+        "summary": "Update a category by id (AUTH REQUIRED)",
         "tags": ["Categories"],
+        "security": [{ "cookieAuth": [] }],
         "parameters": [
           { "name": "id", "in": "path", "required": true, "schema": { "type": "string" } }
         ],
@@ -78,25 +123,29 @@
         "responses": {
           "204": { "description": "Updated successfully" },
           "400": { "description": "Invalid id format or validation error" },
+          "401": { "description": "Unauthorized (not logged in)" },
           "404": { "description": "Category not found" },
           "409": { "description": "Duplicate key" },
           "500": { "description": "Server error" }
         }
       },
       "delete": {
-        "summary": "Delete a category by id",
+        "summary": "Delete a category by id (AUTH REQUIRED)",
         "tags": ["Categories"],
+        "security": [{ "cookieAuth": [] }],
         "parameters": [
           { "name": "id", "in": "path", "required": true, "schema": { "type": "string" } }
         ],
         "responses": {
           "204": { "description": "Deleted successfully" },
           "400": { "description": "Invalid id format" },
+          "401": { "description": "Unauthorized (not logged in)" },
           "404": { "description": "Category not found" },
           "500": { "description": "Server error" }
         }
       }
     },
+
     "/products": {
       "get": {
         "summary": "Get all products",
@@ -107,8 +156,9 @@
         }
       },
       "post": {
-        "summary": "Create a product",
+        "summary": "Create a product (AUTH REQUIRED)",
         "tags": ["Products"],
+        "security": [{ "cookieAuth": [] }],
         "requestBody": {
           "required": true,
           "content": {
@@ -134,6 +184,7 @@
         "responses": {
           "201": { "description": "Created (returns id)" },
           "400": { "description": "Validation error / missing required fields" },
+          "401": { "description": "Unauthorized (not logged in)" },
           "409": { "description": "Duplicate key" },
           "500": { "description": "Server error" }
         }
@@ -154,8 +205,9 @@
         }
       },
       "put": {
-        "summary": "Update a product by id",
+        "summary": "Update a product by id (AUTH REQUIRED)",
         "tags": ["Products"],
+        "security": [{ "cookieAuth": [] }],
         "parameters": [
           { "name": "id", "in": "path", "required": true, "schema": { "type": "string" } }
         ],
@@ -170,20 +222,23 @@
         "responses": {
           "204": { "description": "Updated successfully" },
           "400": { "description": "Invalid id format or validation error" },
+          "401": { "description": "Unauthorized (not logged in)" },
           "404": { "description": "Product not found" },
           "409": { "description": "Duplicate key" },
           "500": { "description": "Server error" }
         }
       },
       "delete": {
-        "summary": "Delete a product by id",
+        "summary": "Delete a product by id (AUTH REQUIRED)",
         "tags": ["Products"],
+        "security": [{ "cookieAuth": [] }],
         "parameters": [
           { "name": "id", "in": "path", "required": true, "schema": { "type": "string" } }
         ],
         "responses": {
           "204": { "description": "Deleted successfully" },
           "400": { "description": "Invalid id format" },
+          "401": { "description": "Unauthorized (not logged in)" },
           "404": { "description": "Product not found" },
           "500": { "description": "Server error" }
         }
@@ -191,6 +246,14 @@
     }
   },
   "components": {
+    "securitySchemes": {
+      "cookieAuth": {
+        "type": "apiKey",
+        "in": "cookie",
+        "name": "connect.sid",
+        "description": "Session cookie set after GitHub OAuth login. Login via /auth/github in the browser, then use Swagger in the same browser session."
+      }
+    },
     "schemas": {
       "CategoryInput": {
         "type": "object",
@@ -198,7 +261,7 @@
           "name": { "type": "string" },
           "description": { "type": "string" }
         },
-        "required": ["name"]
+        "required": ["name", "description"]
       },
       "ProductInput": {
         "type": "object",
