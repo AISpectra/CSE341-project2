@@ -19,6 +19,9 @@ const app = express();
 // Needed for secure cookies behind Render proxy
 app.set("trust proxy", 1);
 
+const BASE_URL = process.env.BASE_URL || `http://localhost:${process.env.PORT || 8080}`;
+const isHttps = BASE_URL.startsWith("https");
+
 // CORS (important if Swagger / browser needs cookies)
 app.use(
   cors({
@@ -39,7 +42,7 @@ app.use(
     cookie: {
       httpOnly: true,
       sameSite: "lax",
-      secure: (process.env.BASE_URL || "").startsWith("https"), // true on Render
+      secure: isHttps, // true on Render
     },
   })
 );
@@ -47,13 +50,26 @@ app.use(
 app.use(passport.initialize());
 app.use(passport.session());
 
-// Basic routes
+// -------- Helpers --------
+function ensureAuth(req, res, next) {
+  // Passport adds isAuthenticated()
+  if (req.isAuthenticated && req.isAuthenticated()) return next();
+  return res.status(401).json({ message: "Not authenticated" });
+}
+
+// Only protect non-GET methods (GET stays public)
+function protectNonGet(req, res, next) {
+  if (req.method === "GET") return next();
+  return ensureAuth(req, res, next);
+}
+
+// -------- Basic routes --------
 app.get("/health", (req, res) => res.status(200).json({ status: "ok" }));
 app.get("/", (req, res) => res.send("Project 2 API is running. Visit /api-docs"));
 
 // -------- AUTH ROUTES --------
 
-// Start OAuth
+// Start OAuth (IMPORTANT: this is a redirect -> Swagger "Execute" often shows Failed to fetch)
 app.get("/auth/github", passport.authenticate("github", { scope: ["user:email"] }));
 
 // OAuth callback
@@ -61,6 +77,7 @@ app.get(
   "/auth/github/callback",
   passport.authenticate("github", { failureRedirect: "/auth/failed" }),
   (req, res) => {
+    // After login, redirect somewhere simple
     res.redirect("/auth/success");
   }
 );
@@ -94,9 +111,9 @@ app.post("/auth/logout", (req, res) => {
   });
 });
 
-// -------- API ROUTES --------
-app.use("/products", productsRoutes);
-app.use("/categories", categoriesRoutes);
+// -------- API ROUTES (protected for POST/PUT/DELETE) --------
+app.use("/products", protectNonGet, productsRoutes);
+app.use("/categories", protectNonGet, categoriesRoutes);
 
 // Swagger
 app.use("/api-docs", swaggerUi.serve, swaggerUi.setup(swaggerDocument));
